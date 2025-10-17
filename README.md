@@ -34,11 +34,13 @@ High-performance molecular fingerprint generation with **3 optimized hash functi
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/bcfp.git
+git clone https://github.com/osmoai/bcfp.git
 cd bcfp
 
 # Install dependencies (conda recommended)
-conda install -c conda-forge rdkit numpy scipy
+mamba create -n rdkit_dev cmake librdkit-dev eigen libboost-devel compilers
+conda activate rdkit_dev
+conda install -c conda-forge numpy scipy
 conda install -c conda-forge xxhash blake3
 
 # Build and install
@@ -224,7 +226,7 @@ If you use BCFP in your research, please cite:
   title={BCFP: High-Performance Molecular Fingerprints with Multiple Hash Functions},
   author={BCFP Contributors},
   year={2025},
-  url={https://github.com/yourusername/bcfp}
+  url={https://github.com/osmai/bcfp}
 }
 ```
 
