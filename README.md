@@ -212,9 +212,9 @@ On a dataset of 10,000 molecules (Intel i9, 12 cores):
 2. **Sort&Slice**: Use `top_k=512-1024` for good balance of speed/accuracy
 3. **OOV Bucket**: Essential for production models with distribution shift
 4. **Radius Selection**: 
+   - `radius=1` (ECFP2): Small molecules, fragments
    - `radius=2` (ECFP4): General purpose, most common
    - `radius=3` (ECFP6): Large molecules, more specificity
-   - `radius=1` (ECFP2): Small molecules, fragments
 5. **Hash Function**: `xxhash` for speed, `blake3` for reproducibility
 
 ## Citation
