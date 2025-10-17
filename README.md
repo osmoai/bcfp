@@ -223,8 +223,9 @@ If you use BCFP in your research, please cite:
 
 ```bibtex
 @software{bcfp2025,
-  title={BCFP: High-Performance Molecular Fingerprints with Multiple Hash Functions},
-  author={BCFP Contributors},
+  title={Bond-Centered Molecular Fingerprint Derivatives: A BBBP Dataset Study},
+  author={Guillaume Godin},
+  ref={https://arxiv.org/abs/2510.04837}
   year={2025},
   url={https://github.com/osmai/bcfp}
 }
