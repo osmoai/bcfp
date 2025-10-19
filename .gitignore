@@ -1,0 +1,30 @@
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.so
+*.dylib
+*.dll
+*.pyd
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Test files at root (should be in tests/)
+/test_*.py
+
+# Development directories (not for production)
+docs/
+archive/
+
+# Temporary files
+*.pkl
+*.json.gz
+*.csv.gz

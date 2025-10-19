@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0", "pybind11>=2.10.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bcfp"
+version = "2.0.0"
+description = "High-performance molecular fingerprints (ECFP/BCFP) with 7 hash function implementations"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT License"}
+keywords = ["molecular-fingerprints", "ecfp", "bcfp", "cheminformatics", "hash-functions"]
+authors = [
+  {name = "BCFP Contributors"}
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Chemistry",
+]
+
+dependencies = [
+  "numpy>=1.19.0",
+  "scipy>=1.5.0",
+  "rdkit>=2020.09.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0.0", "pytest-cov>=3.0.0"]
+ml = ["xgboost>=1.5.0", "scikit-learn>=0.24.0", "pandas>=1.2.0"]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/bcfp"
+Documentation = "https://github.com/yourusername/bcfp#readme"
+Repository = "https://github.com/yourusername/bcfp.git"
+Issues = "https://github.com/yourusername/bcfp/issues"
+
