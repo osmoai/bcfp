@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "pybind11>=2.10.0"]
+requires = ["setuptools>=64", "wheel", "pybind11>=2.10", "numpy>=1.23"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,7 @@ name = "bcfp"
 version = "2.0.0"
 description = "High-performance molecular fingerprints (ECFP/BCFP) with 7 hash function implementations"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 license = {text = "MIT License"}
 keywords = ["molecular-fingerprints", "ecfp", "bcfp", "cheminformatics", "hash-functions"]
 authors = [
@@ -22,9 +22,10 @@ classifiers = [
 ]
 
 dependencies = [
-  "numpy>=1.19.0",
-  "scipy>=1.5.0",
-  "rdkit>=2020.09.1",
+  "rdkit>=2025.3",
+  "numpy>=1.23",
+  "xxhash>=3.0.0",
+  "blake3>=0.3.0",
 ]
 
 [project.optional-dependencies]
