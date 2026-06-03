@@ -7,17 +7,22 @@ A high-performance Python library for generating molecular fingerprints with:
 - Sort&Slice feature selection with OOV handling
 - C++ implementation for maximum speed
 
-Example:
+Two API layers:
+    * BCFPEnhanced   — scikit-learn-style fit/transform with Sort&Slice + OOV (recommended);
+    * FingerprintGenerator — low-level: generate_sparse() + static sortslice_fit/sortslice_transform.
+
+Example (sklearn-style):
+    >>> from bcfp import BCFPEnhanced
+    >>> gen = BCFPEnhanced(fp_type='ecfp', radius=2, n_bits=2048, top_k=512, include_oov=True)
+    >>> X_train = gen.fit_transform(train_smiles)   # learn top-512 vocab, dense (n, 513)
+    >>> X_test  = gen.transform(test_smiles)         # apply fitted vocab + OOV bucket
+
+Example (low-level):
     >>> from bcfp import FingerprintGenerator
-    >>> 
-    >>> # Generate ECFP fingerprints (batch processing)
+    >>> from rdkit import Chem
     >>> gen = FingerprintGenerator('rdkit_native', 'ecfp', radius=2)
-    >>> smiles = ['CCO', 'c1ccccc1', 'CC(=O)O']
-    >>> X = gen.transform(smiles)  # Shape: (3, 2048)
-    >>> 
-    >>> # Sort&Slice with OOV handling
-    >>> X_train = gen.fit_transform(train_smiles, top_k=512, include_oov=True)
-    >>> X_test = gen.transform(test_smiles)  # Uses fitted vocabulary
+    >>> sparse = [gen.generate_sparse(Chem.MolFromSmiles(s)) for s in smiles]
+    >>> X = np.array([gen.fold_sparse_to_dense(s) for s in sparse])  # folded to n_bits
 """
 
 __version__ = '2.0.0'
@@ -29,10 +34,12 @@ from .fingerprints import (
     load_sortslice_vocab,
     combine_fingerprints
 )
+from .enhanced import BCFPEnhanced
 from .model_persistence import FingerprintModel
 from . import utils
 
 __all__ = [
+    'BCFPEnhanced',
     'FingerprintGenerator',
     'FingerprintModel',
     'save_sortslice_vocab',

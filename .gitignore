@@ -21,8 +21,8 @@ __pycache__/
 /test_*.py
 
 # Development directories (not for production)
-docs/
 archive/
+build.old*/
 
 # Temporary files
 *.pkl

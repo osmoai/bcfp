@@ -2,7 +2,8 @@
 
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![Python 3.8+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![C++17](https://img.shields.io/badge/C++-17-blue.svg)](https://isocpp.org/)
+[![C++20](https://img.shields.io/badge/C++-20-blue.svg)](https://isocpp.org/)
+[![RDKit 2026.03](https://img.shields.io/badge/RDKit-2026.03-green.svg)](https://www.rdkit.org/)
 
 High-performance molecular fingerprint generation with **3 optimized hash function implementations** and advanced feature selection. Supports both ECFP (Extended-Connectivity) and BCFP (Bond-Centered) fingerprints with Sort&Slice and Out-of-Vocabulary (OOV) handling.
 
@@ -27,37 +28,32 @@ High-performance molecular fingerprint generation with **3 optimized hash functi
 ### Requirements
 
 - Python >= 3.11
-- RDKit >= 2025.03.1
-- NumPy >= 1.19.0
-- C++17 compatible compiler
-- External libraries: xxHash, BLAKE3
+- RDKit (latest tested: **2026.03**; 2025.3+ expected to work) — C++ headers via conda-forge `librdkit-dev`
+- A **C++20** compiler (clang on macOS, gcc/clang on Linux) — RDKit 2026.03 headers use C++20
+- NumPy
+
+The two non-RDKit hashes are **self-contained**: xxHash is header-only and BLAKE3 is vendored under
+`src/vendor/blake3/`, so **RDKit is the only external build dependency** — no xxHash/BLAKE3 to install.
 
 ### Install from source
 
 ```bash
-# Clone the repository
 git clone https://github.com/osmoai/bcfp.git
 cd bcfp
 
-# Create and activate conda environment with build tools
-mamba create -n rdkit_dev cmake librdkit-dev eigen libboost-devel compilers
-conda activate rdkit_dev
+# One command — RDKit 2026.03 + C++ headers (librdkit-dev) + Boost + C++20 toolchain
+conda env create -f environment.yml      # or: mamba env create -f environment.yml
+conda activate bcfp
 
-# Install Python dependencies
-conda install -c conda-forge numpy scipy
-conda install -c conda-forge xxhash blake3
+# Build + install (editable). setup.py auto-detects RDKit from the active env.
+pip install -e .
 
-# Build and install
-python setup.py install
+# Verify
+python -c "import bcfp; from bcfp.fingerprints import FingerprintGenerator; print('bcfp OK')"
 ```
 
-**Note**: Use `mamba` for faster dependency resolution, or replace with `conda` if mamba is not installed.
-
-### Quick install with pip (coming soon)
-
-```bash
-pip install bcfp
-```
+See **[BUILD.md](BUILD.md)** for build internals, a custom-RDKit (`RDKIT_PREFIX`) path, and
+troubleshooting.
 
 ## Quick Start
 
@@ -175,37 +171,40 @@ for smi, pred, prob in zip(new_smiles, predictions, probabilities):
 #   CC(C)CCO        → Active   (probability: 0.970)
 ```
 
-### Basic ECFP Generation (Low-Level API)
+### Basic ECFP Generation
 
 ```python
-from bcfp import FingerprintGenerator
+from bcfp import BCFPEnhanced
 
-# Generate ECFP (Morgan fingerprints)
+# Generate ECFP (Morgan fingerprints), folded to n_bits
 smiles = ["CCO", "c1ccccc1", "CC(=O)O"]
-gen = FingerprintGenerator(
+gen = BCFPEnhanced(
     hash_func='xxhash',  # Fast non-cryptographic hash
     fp_type='ecfp',      # Extended-Connectivity Fingerprint
     radius=2,            # ECFP4 (radius 2 = diameter 4)
-    n_bits=2048          # Bit vector length
+    n_bits=2048,         # Bit vector length (top_k=None -> plain folding)
 )
 
 fingerprints = gen.transform(smiles)
 print(fingerprints.shape)  # (3, 2048)
 ```
 
+> For the low-level API (sparse keys + Sort&Slice helpers) use `FingerprintGenerator.generate_sparse`
+> / `sortslice_fit` / `sortslice_transform` — see [docs/api.md](docs/api.md).
+
 ### ECFP + BCFP Concatenation
 
 ```python
+import numpy as np
 # ECFP captures atom neighborhoods
-gen_ecfp = FingerprintGenerator('xxhash', 'ecfp', radius=2, n_bits=2048)
+gen_ecfp = BCFPEnhanced(hash_func='xxhash', fp_type='ecfp', radius=2, n_bits=2048)
 fp_ecfp = gen_ecfp.transform(smiles)
 
 # BCFP captures bond neighborhoods (complementary)
-gen_bcfp = FingerprintGenerator('xxhash', 'bcfp', radius=2, n_bits=2048)
+gen_bcfp = BCFPEnhanced(hash_func='xxhash', fp_type='bcfp', radius=2, n_bits=2048)
 fp_bcfp = gen_bcfp.transform(smiles)
 
 # Concatenate for enhanced representation
-import numpy as np
 fp_combined = np.hstack([fp_ecfp, fp_bcfp])  # Shape: (3, 4096)
 ```
 
