@@ -1,0 +1,30 @@
+# BCFP build + runtime environment (conda-forge).
+#
+# The only external build dependency is RDKit's C++ side: conda-forge's `librdkit-dev` ships the
+# C++ headers ($PREFIX/include/rdkit) the extension compiles against, `libboost-devel` provides the
+# Boost headers RDKit's headers #include, and `rdkit` is the Python runtime. The two non-RDKit
+# hashes are self-contained (xxhash is header-only; blake3 is vendored under src/vendor/blake3),
+# so NO xxhash/blake3 packages are needed.
+#
+#   conda env create -f environment.yml     # or: mamba env create -f environment.yml
+#   conda activate bcfp
+#   pip install -e .
+#
+name: bcfp
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - rdkit=2026.03          # Python runtime (latest)
+  - librdkit-dev=2026.03   # RDKit C++ headers the extension builds against
+  - libboost-devel         # Boost headers (pulled in by RDKit's headers)
+  - pybind11>=2.10
+  - cxx-compiler           # C++20-capable clang/gcc toolchain
+  - numpy>=1.23,<2
+  - scipy>=1.5
+  - pytest>=7.0
+  - pip
+  # Optional, for the ML examples/benchmarks:
+  - scikit-learn
+  - pandas
+  - xgboost

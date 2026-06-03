@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "bcfp"
 version = "2.0.0"
-description = "High-performance molecular fingerprints (ECFP/BCFP) with 7 hash function implementations"
+description = "High-performance molecular fingerprints (ECFP/BCFP) with 3 hash functions (RDKit-native, xxHash, BLAKE3)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT License"}
@@ -22,10 +22,11 @@ classifiers = [
 ]
 
 dependencies = [
+  # 2026.03 recommended (see BUILD.md). The C++ headers come from conda-forge librdkit-dev.
   "rdkit>=2025.3",
   "numpy>=1.23,<2",
-  "xxhash>=3.0.0",
-  "blake3>=0.3.0",
+  # NOTE: no xxhash/blake3 here on purpose — hashing lives in the C++ core (xxhash is header-only,
+  # blake3 is vendored under src/vendor/blake3), so no Python hash packages are required.
 ]
 
 [project.optional-dependencies]

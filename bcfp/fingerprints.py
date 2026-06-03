@@ -105,10 +105,12 @@ class FingerprintGenerator:
             if self.use_counts:
                 # GetSparseCountFingerprint matches deprecated GetMorganFingerprint(useCounts=True)
                 fp = mgen.GetSparseCountFingerprint(mol)
+                return dict(fp.GetNonzeroElements())
             else:
-                # GetSparseFingerprint for binary (presence/absence)
+                # GetSparseFingerprint returns a SparseBitVect, which exposes GetOnBits() (not
+                # GetNonzeroElements — only count vectors have that) -> {bit: 1} for presence.
                 fp = mgen.GetSparseFingerprint(mol)
-            return dict(fp.GetNonzeroElements())
+                return {int(b): 1 for b in fp.GetOnBits()}
         
         elif self.hash_func == 'blake3':
             return bcfp_cpp.get_morgan_fingerprint_blake3(
