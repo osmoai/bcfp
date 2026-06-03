@@ -57,3 +57,12 @@ def test_all_three_hashes(hash_func):
 def test_ecfp_and_bcfp(fp_type):
     gen = BCFPEnhanced(fp_type=fp_type, radius=2, n_bits=512, top_k=None)
     assert gen.transform(TRAIN[:6]).shape == (6, 512)
+
+
+def test_presence_mode_rdkit_native_no_crash():
+    # Regression: use_counts=False + rdkit_native ECFP used to crash on modern RDKit
+    # (GetSparseFingerprint -> SparseBitVect has no GetNonzeroElements). Must yield presence feats.
+    gen = BCFPEnhanced(fp_type="ecfp", radius=2, n_bits=1024, top_k=None,
+                       use_counts=False, hash_func="rdkit_native")
+    X = gen.transform(["CCO", "c1ccccc1", "CC(=O)O", "CCCl"])
+    assert X.shape == (4, 1024) and X.sum() > 0
