@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=64", "wheel", "pybind11>=2.10", "numpy>=1.23,<2"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core>=0.10", "nanobind>=2.4,<3"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "bcfp"
@@ -8,7 +8,7 @@ version = "2.0.0"
 description = "High-performance molecular fingerprints (ECFP/BCFP) with 3 hash functions (RDKit-native, xxHash, BLAKE3)"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT License"}
+license = "BSD-3-Clause"
 keywords = ["molecular-fingerprints", "ecfp", "bcfp", "cheminformatics", "hash-functions"]
 authors = [
   {name = "BCFP Contributors"}
@@ -16,14 +16,13 @@ authors = [
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Science/Research",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Topic :: Scientific/Engineering :: Chemistry",
 ]
 
 dependencies = [
-  # 2026.03 recommended (see BUILD.md). The C++ headers come from conda-forge librdkit-dev.
-  "rdkit>=2025.3",
+  # 2026.09.2 tested (see BUILD.md). C++ headers come from conda-forge librdkit-dev.
+  "rdkit>=2026.9.2",
   "numpy>=1.23,<2",
   # NOTE: no xxhash/blake3 here on purpose — hashing lives in the C++ core (xxhash is header-only,
   # blake3 is vendored under src/vendor/blake3), so no Python hash packages are required.
@@ -39,12 +38,8 @@ Documentation = "https://github.com/osmoai/bcfp#readme"
 Repository = "https://github.com/osmoai/bcfp.git"
 Issues = "https://github.com/osmoai/bcfp/issues"
 
-[tool.setuptools]
-packages = ["bcfp"]
-
-[tool.setuptools.package-data]
-bcfp = ["*.so", "*.pyd", "*.dylib", "*.dll"]
-
-[tool.setuptools.package-dir]
-"" = "."
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+build-dir = "build/{wheel_tag}"
+wheel.packages = ["bcfp"]
 

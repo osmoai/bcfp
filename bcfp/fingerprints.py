@@ -4,7 +4,7 @@ Supports: Basic (folded), Sort&Slice, Sort&Slice+OOV
 """
 import numpy as np
 from collections import Counter
-from typing import List, Dict, Tuple, Optional, Union
+from typing import Any, Dict, List, Literal, Tuple
 try:
     import _bcfp as bcfp_cpp
 except ImportError:
@@ -93,6 +93,73 @@ class FingerprintGenerator:
             return self._generate_sparse_ecfp(mol)
         else:  # bcfp
             return self._generate_sparse_bcfp(mol)
+
+    def generate_bytes(self, mol) -> bytes:
+        """Generate a folded binary fingerprint as chemfp-compatible bytes."""
+        if mol is None:
+            return bytes((self.n_bits + 7) // 8)
+        return self._generate_cpp(mol, "bytes")
+
+    def generate_count_buffer(
+        self,
+        mol,
+        layout: Literal["32_32", "64_32_packed", "64_32"] = "64_32_packed",
+    ) -> bytes:
+        """Generate a sorted binary count-feature buffer for chemfp CountFingerprint."""
+        if mol is None:
+            return b""
+        if layout not in {"32_32", "64_32_packed", "64_32"}:
+            raise ValueError("layout must be '32_32', '64_32_packed', or '64_32'")
+        return self._generate_cpp(mol, layout)
+
+    def generate_chemfp_count_fingerprint(
+        self,
+        mol,
+        layout: Literal["32_32", "64_32_packed", "64_32"] = "64_32_packed",
+    ) -> Any:
+        """Generate a chemfp CountFingerprint without building a Python feature dict."""
+        try:
+            from chemfp import countops
+        except ImportError as exc:
+            raise ImportError(
+                "chemfp is required for generate_chemfp_count_fingerprint()"
+            ) from exc
+
+        constructor = getattr(countops.CountFingerprint, f"from_buffer_{layout}")
+        return constructor(self.generate_count_buffer(mol, layout))
+
+    def _generate_cpp(self, mol, return_type: str):
+        if bcfp_cpp is None:
+            raise ImportError("BCFP's compiled _bcfp extension is not available")
+
+        if self.fp_type == "ecfp":
+            functions = {
+                "rdkit_native": bcfp_cpp.get_morgan_fingerprint,
+                "xxhash": bcfp_cpp.get_morgan_fingerprint_xxhash,
+                "blake3": bcfp_cpp.get_morgan_fingerprint_blake3,
+            }
+            return functions[self.hash_func](
+                mol,
+                radius=self.radius,
+                useCounts=self.use_counts,
+                useChirality=self.use_chirality,
+                returnType=return_type,
+                nBits=self.n_bits,
+            )
+
+        functions = {
+            "rdkit_native": bcfp_cpp.get_bond_morgan_fingerprint_native,
+            "xxhash": bcfp_cpp.get_bond_morgan_fingerprint_xxhash,
+            "blake3": bcfp_cpp.get_bond_morgan_fingerprint_blake3,
+        }
+        return functions[self.hash_func](
+            mol,
+            radius=self.radius,
+            useCounts=self.use_counts,
+            useChirality=self.use_chirality,
+            returnType=return_type,
+            nBits=self.n_bits,
+        )
     
     def _generate_sparse_ecfp(self, mol) -> Dict[int, int]:
         """Generate sparse ECFP fingerprint."""
@@ -113,43 +180,23 @@ class FingerprintGenerator:
                 return {int(b): 1 for b in fp.GetOnBits()}
         
         elif self.hash_func == 'blake3':
-            return bcfp_cpp.get_morgan_fingerprint_blake3(
-                mol, radius=self.radius, 
-                useCounts=self.use_counts, 
-                useChirality=self.use_chirality
-            )
+            return self._generate_cpp(mol, "dict")
         
         elif self.hash_func == 'xxhash':
-            return bcfp_cpp.get_morgan_fingerprint_xxhash(
-                mol, radius=self.radius, 
-                useCounts=self.use_counts, 
-                useChirality=self.use_chirality
-            )
+            return self._generate_cpp(mol, "dict")
         
     
     def _generate_sparse_bcfp(self, mol) -> Dict[int, int]:
         """Generate sparse BCFP fingerprint."""
         if self.hash_func == 'rdkit_native':
             # RDKit Native - uses same hash_combine as MorganGenerator
-            return bcfp_cpp.get_bond_morgan_fingerprint_native(
-                mol, radius=self.radius, 
-                useCounts=self.use_counts, 
-                useChirality=self.use_chirality
-            )
+            return self._generate_cpp(mol, "dict")
         
         elif self.hash_func == 'blake3':
-            return bcfp_cpp.get_bond_morgan_fingerprint_blake3(
-                mol, radius=self.radius, 
-                useCounts=self.use_counts, 
-                useChirality=self.use_chirality
-            )
+            return self._generate_cpp(mol, "dict")
         
         elif self.hash_func == 'xxhash':
-            return bcfp_cpp.get_bond_morgan_fingerprint_xxhash(
-                mol, radius=self.radius, 
-                useCounts=self.use_counts, 
-                useChirality=self.use_chirality
-            )
+            return self._generate_cpp(mol, "dict")
     
     def fold_sparse_to_dense(self, sparse_dict: Dict[int, int]) -> np.ndarray:
         """Fold sparse fingerprint to fixed-size dense vector using modulo."""

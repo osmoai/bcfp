@@ -2,8 +2,8 @@
 
 BCFP generates molecular fingerprints — **ECFP** (atom-centered) and **BCFP** (bond-centered) — with
 three interchangeable hash backends and Sort&Slice feature selection + out-of-vocabulary (OOV)
-handling. The C++ core is fast and **self-contained** (xxHash is header-only; BLAKE3 is vendored), so
-RDKit is the only external build dependency.
+handling. The C++ core is fast: xxHash uses its header-only C++ API and BLAKE3 is vendored, so
+neither hash requires a linked runtime library.
 
 | layer | entry point | use it for |
 |---|---|---|
@@ -63,6 +63,45 @@ X = np.array([gen.fold_sparse_to_dense(sp) for sp in sparse])
 vocab, key2col = FingerprintGenerator.sortslice_fit(sparse, train_idx, top_k=512, sort_by='df', min_df=2)
 X = FingerprintGenerator.sortslice_transform(sparse, all_idx, key2col, use_counts=True, add_oov_bucket=True)
 ```
+
+### chemfp output
+
+The C++ extension returns both chemfp binary fingerprints and packed count-feature buffers without
+materializing a Python feature dictionary. The convenience conversion requires chemfp 5.2b1 or
+later; raw `bytes` and packed buffers do not require chemfp to be installed.
+
+```python
+from chemfp import countops
+
+gen = FingerprintGenerator('xxhash', 'bcfp', radius=2, use_counts=True, n_bits=2048)
+mol = Chem.MolFromSmiles('CCO')
+
+binary_fp = gen.generate_bytes(mol)
+
+packed = gen.generate_count_buffer(mol)  # default: sorted 64_32_packed records
+count_fp = countops.CountFingerprint.from_buffer_64_32_packed(
+    packed
+)
+
+# Convenience form of the two lines above (chemfp is an optional dependency):
+count_fp = gen.generate_chemfp_count_fingerprint(mol)
+```
+
+The available count layouts map directly to chemfp constructors:
+
+| BCFP layout | bytes/feature | chemfp constructor |
+|---|---:|---|
+| `32_32` | 8 | `CountFingerprint.from_buffer_32_32` |
+| `64_32_packed` | 12 | `CountFingerprint.from_buffer_64_32_packed` |
+| `64_32` | 16 | `CountFingerprint.from_buffer_64_32` |
+
+Records use explicit little-endian unsigned integers and increasing feature-index order. BCFP's
+feature keys are 32-bit, so all three layouts are lossless. `generate_bytes()` uses chemfp's bit
+ordering: bit 0 is the least-significant bit of byte 0.
+
+At the Python/C++ boundary, BCFP calls RDKit's `mol.ToBinary()` and unpickles it with RDKit's C++
+`MolPickler`. A precomputed `mol.ToBinary()` byte string is also accepted by the low-level `_bcfp`
+functions. No SMILES serialization/reparse is involved.
 
 ## Parameter reference
 

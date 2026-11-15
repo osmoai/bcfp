@@ -333,7 +333,7 @@ std::unordered_map<uint32_t, int> GetMorganFingerprint(
     if (fp) {
         // Convert SparseIntVect to unordered_map
         for (const auto& [key, value] : fp->getNonzeroElements()) {
-            features[key] = value;
+            features[key] = useCounts ? value : 1;
         }
         delete fp;
     }

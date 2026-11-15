@@ -3,7 +3,7 @@
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![Python 3.8+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![C++20](https://img.shields.io/badge/C++-20-blue.svg)](https://isocpp.org/)
-[![RDKit 2026.03](https://img.shields.io/badge/RDKit-2026.03-green.svg)](https://www.rdkit.org/)
+[![RDKit 2026.09.2](https://img.shields.io/badge/RDKit-2026.09.2-green.svg)](https://www.rdkit.org/)
 
 High-performance molecular fingerprint generation with **3 optimized hash function implementations** and advanced feature selection. Supports both ECFP (Extended-Connectivity) and BCFP (Bond-Centered) fingerprints with Sort&Slice and Out-of-Vocabulary (OOV) handling.
 
@@ -28,12 +28,12 @@ High-performance molecular fingerprint generation with **3 optimized hash functi
 ### Requirements
 
 - Python >= 3.11
-- RDKit (latest tested: **2026.03**; 2025.3+ expected to work) — C++ headers via conda-forge `librdkit-dev`
-- A **C++20** compiler (clang on macOS, gcc/clang on Linux) — RDKit 2026.03 headers use C++20
+- RDKit **2026.09.2** — C++ headers via conda-forge `librdkit-dev`
+- A **C++20** compiler (clang on macOS, gcc/clang on Linux)
 - NumPy
 
-The two non-RDKit hashes are **self-contained**: xxHash is header-only and BLAKE3 is vendored under
-`src/vendor/blake3/`, so **RDKit is the only external build dependency** — no xxHash/BLAKE3 to install.
+The two non-RDKit hashes require no linked libraries: the environment supplies xxHash's header-only
+C++ API, and BLAKE3 is vendored under `src/vendor/blake3/`. No Python hash packages are required.
 
 ### Install from source
 
@@ -41,11 +41,11 @@ The two non-RDKit hashes are **self-contained**: xxHash is header-only and BLAKE
 git clone https://github.com/osmoai/bcfp.git
 cd bcfp
 
-# One command — RDKit 2026.03 + C++ headers (librdkit-dev) + Boost + C++20 toolchain
+# One command — RDKit 2026.09.2 + C++ headers + nanobind + C++20 toolchain
 conda env create -f environment.yml      # or: mamba env create -f environment.yml
 conda activate bcfp
 
-# Build + install (editable). setup.py auto-detects RDKit from the active env.
+# Build + install (editable). CMake auto-detects RDKit from the active env.
 pip install -e .
 
 # Verify
@@ -191,6 +191,31 @@ print(fingerprints.shape)  # (3, 2048)
 
 > For the low-level API (sparse keys + Sort&Slice helpers) use `FingerprintGenerator.generate_sparse`
 > / `sortslice_fit` / `sortslice_transform` — see [docs/api.md](docs/api.md).
+
+### chemfp-compatible output
+
+`FingerprintGenerator` can return chemfp's native binary form directly, without first creating a
+Python dictionary or NumPy array:
+
+```python
+from bcfp import FingerprintGenerator
+from rdkit import Chem
+
+mol = Chem.MolFromSmiles("CCO")
+gen = FingerprintGenerator("xxhash", "bcfp", radius=2, n_bits=2048)
+
+binary_fp = gen.generate_bytes(mol)  # 256-byte, folded binary fingerprint
+count_fp = gen.generate_chemfp_count_fingerprint(mol)  # chemfp CountFingerprint
+```
+
+The second call requires chemfp 5.2b1 or later. To control the boundary explicitly, use
+`generate_count_buffer(mol, layout="64_32_packed")` and pass the result to
+`chemfp.countops.CountFingerprint.from_buffer_64_32_packed()`. The `32_32`, `64_32_packed`
+(12 bytes/feature), and aligned `64_32` (16 bytes/feature) layouts are supported.
+
+RDKit molecules cross into the nanobind C++ extension through `mol.ToBinary()` rather than a SMILES
+round-trip. This preserves RDKit's serialized molecule state, avoids canonicalization and
+reparsing, and keeps the boundary independent of RDKit's Python binding implementation.
 
 ### ECFP + BCFP Concatenation
 
@@ -386,6 +411,9 @@ FingerprintGenerator(
 
 **Methods**:
 - **`generate_sparse(mol)`**: Generate sparse fingerprint (dict of key → count)
+- **`generate_bytes(mol)`**: Generate a folded binary fingerprint as bytes (chemfp native form)
+- **`generate_count_buffer(mol, layout)`**: Generate sorted packed count features in C++
+- **`generate_chemfp_count_fingerprint(mol, layout)`**: Generate a chemfp `CountFingerprint`
 - **`generate_basic(mol)`**: Generate folded dense fingerprint (np.array)
 - **`sortslice_fit(sparse_list, train_idx, top_k)`**: Select top-K features from training set
   - Returns: `(vocab, key2col)` - list of selected keys and mapping dict
@@ -508,7 +536,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - **Author**: Guillaume GODIN (Osmo labs pbc)
 - Built on RDKit for molecular structure handling
 - Hash implementations: xxHash, BLAKE3, RDKit native
-- Uses pybind11 for Python-C++ interoperability
+- Uses nanobind for Python-C++ interoperability
 
 ## Support
 
