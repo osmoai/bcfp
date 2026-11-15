@@ -1,10 +1,9 @@
 # BCFP build + runtime environment (conda-forge).
 #
-# The only external build dependency is RDKit's C++ side: conda-forge's `librdkit-dev` ships the
-# C++ headers ($PREFIX/include/rdkit) the extension compiles against, `libboost-devel` provides the
-# Boost headers RDKit's headers #include, and `rdkit` is the Python runtime. The two non-RDKit
-# hashes are self-contained (xxhash is header-only; blake3 is vendored under src/vendor/blake3),
-# so NO xxhash/blake3 packages are needed.
+# RDKit's C++ side comes from conda-forge: `librdkit-dev` ships the headers and libraries the
+# extension compiles against, while `rdkit` supplies the Python runtime. BCFP's Python extension
+# itself is built with nanobind. See BUILD.md for testing against RDKit's optional nanobind Python
+# wrappers; the stock conda-forge RDKit package still uses Boost.Python in 2026.09.2.
 #
 #   conda env create -f environment.yml     # or: mamba env create -f environment.yml
 #   conda activate bcfp
@@ -15,10 +14,14 @@ channels:
   - conda-forge
 dependencies:
   - python=3.12
-  - rdkit=2026.03          # Python runtime (latest)
-  - librdkit-dev=2026.03   # RDKit C++ headers the extension builds against
+  - rdkit=2026.09.2         # Latest tested Python runtime
+  - librdkit-dev=2026.09.2  # Matching RDKit C++ headers and libraries
   - libboost-devel         # Boost headers (pulled in by RDKit's headers)
-  - pybind11>=2.10
+  - nanobind>=2.4,<3         # RDKit 2026.09 nanobind wrappers require major version 2
+  - scikit-build-core>=0.10
+  - cmake
+  - ninja
+  - xxhash                 # Header-only C++ API used by src/bcfp.cpp
   - cxx-compiler           # C++20-capable clang/gcc toolchain
   - numpy>=1.23,<2
   - scipy>=1.5
