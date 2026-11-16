@@ -176,18 +176,25 @@ for smi, pred, prob in zip(new_smiles, predictions, probabilities):
 ```python
 from bcfp import BCFPEnhanced
 
-# Generate ECFP (Morgan fingerprints), folded to n_bits
-smiles = ["CCO", "c1ccccc1", "CC(=O)O"]
+# Default: Sort&Slice top-(n_bits-1) training keys + 1 OOV bucket (fit on training data)
 gen = BCFPEnhanced(
     hash_func='xxhash',  # Fast non-cryptographic hash
     fp_type='ecfp',      # Extended-Connectivity Fingerprint
     radius=2,            # ECFP4 (radius 2 = diameter 4)
-    n_bits=2048,         # Bit vector length (top_k=None -> plain folding)
+    n_bits=2048,         # Output width: <=2047 selected keys + 1 OOV column
 )
+X_train = gen.fit_transform(train_smiles)
+X_test = gen.transform(test_smiles)
 
-fingerprints = gen.transform(smiles)
+# Stateless alternative (no fit, no vocabulary): fold to n_bits
+folded = BCFPEnhanced(fp_type='ecfp', n_bits=2048, top_k=None, fold='remix')
+fingerprints = folded.transform(["CCO", "c1ccccc1", "CC(=O)O"])
 print(fingerprints.shape)  # (3, 2048)
 ```
+
+> **Changed in 2.1.0:** `BCFPEnhanced` defaults to Sort&Slice + OOV (`top_k='auto'`,
+> `include_oov=True`), so call `fit` before `transform`. Pass `top_k=None` to get the old plain
+> folding. See [Choosing a folding scheme](#choosing-a-folding-scheme).
 
 > For the low-level API (sparse keys + Sort&Slice helpers) use `FingerprintGenerator.generate_sparse`
 > / `sortslice_fit` / `sortslice_transform` — see [docs/api.md](docs/api.md).
@@ -223,14 +230,14 @@ reparsing, and keeps the boundary independent of RDKit's Python binding implemen
 import numpy as np
 # ECFP captures atom neighborhoods
 gen_ecfp = BCFPEnhanced(hash_func='xxhash', fp_type='ecfp', radius=2, n_bits=2048)
-fp_ecfp = gen_ecfp.transform(smiles)
+fp_ecfp = gen_ecfp.fit_transform(train_smiles)
 
 # BCFP captures bond neighborhoods (complementary)
 gen_bcfp = BCFPEnhanced(hash_func='xxhash', fp_type='bcfp', radius=2, n_bits=2048)
-fp_bcfp = gen_bcfp.transform(smiles)
+fp_bcfp = gen_bcfp.fit_transform(train_smiles)
 
 # Concatenate for enhanced representation
-fp_combined = np.hstack([fp_ecfp, fp_bcfp])  # Shape: (3, 4096)
+fp_combined = np.hstack([fp_ecfp, fp_bcfp])  # up to (n, 4096)
 ```
 
 ### Sort&Slice with OOV
@@ -277,6 +284,50 @@ X_test = gen.sortslice_transform(
     add_oov_bucket=True
 )  # Shape: (2, 2049)
 ```
+
+## Choosing a folding scheme
+
+There are tens of thousands of sparse ECFP/BCFP keys, and they have to fit into a fixed number of
+columns. How they are packed matters far more than which hash function made them. Benchmark: BBBP
+(4092 molecules), R=2 ECFP + BCFP = 67,009 keys (~33 per column at 2048), XGBoost,
+10 seeds × 10-fold with paired splits, vocabulary fitted on the training fold only. Δ is the
+difference from an ideal random hash (mean of 10 salts), with 95% CI.
+
+| scheme (2048 columns) | AUROC | AUPRC | ΔAUROC vs random hash |
+|---|---|---|---|
+| **Sort&Slice + 1 OOV bucket** (default) | **0.8522** | **0.9104** | **+0.0145** [+0.0131, +0.0158] |
+| exact keys, no folding (~60k columns) | 0.8519 | 0.9101 | +0.0142 |
+| Sort&Slice, no OOV | 0.8511 | 0.9102 | +0.0134 |
+| random hash (reference) | 0.8377 | 0.8996 | 0 |
+| native keys `% 2048` (old default) | 0.8346 | 0.8976 | −0.0031 [−0.0046, −0.0016] |
+| two hashes per key | 0.8292 | 0.8932 | −0.0085 |
+
+**Should the OOV bucket be an array?** No. Hashing the out-of-vocabulary keys into several columns
+instead of summing them into one makes results worse at every size tested (2048 columns in total;
+Δ is the paired difference from the single bucket):
+
+| OOV columns | AUROC | ΔAUROC vs 1 bucket |
+|---|---|---|
+| **1** | **0.8522** | reference |
+| 20 (1%) | 0.8417 | −0.0104 ± 0.0009 |
+| 41 (2%) | 0.8386 | −0.0135 ± 0.0010 |
+| 102 (5%) | 0.8362 | −0.0159 ± 0.0011 |
+
+Each extra OOV column sums hundreds of unrelated rare keys. That gives trees noisy, size-correlated
+splits to overfit to. A single bucket keeps the "how much rare chemistry" signal without the noise.
+
+- **Default:** `BCFPEnhanced(n_bits=2048)`, which is Sort&Slice + 1 OOV and matches the full
+  unfolded representation at 1/30 of the columns. At 4096 columns it scores higher than the
+  unfolded representation (0.8537).
+- **Stateless fallback:** `top_k=None, fold='remix'`, which applies `splitmix64(key ^ salt)` before
+  `% n_bits`. Plain `% n_bits` on native keys scores below every random salt.
+- **Hash function:** `rdkit_native`, `xxhash` and `blake3` differ by less than the salt-to-salt noise
+  (~0.005 AUROC) once they are compared on the same features.
+
+The full tables (1024/4096 widths, signed hashing, hashed tails) and the method are in
+[docs/binning_benchmark.md](docs/binning_benchmark.md). To reproduce:
+`python benchmarks/binning_bbbp.py --data bbbp.csv` (add `--oov-sweep` for the OOV table).
+These numbers are from one dataset and one model.
 
 ## Hash Functions
 

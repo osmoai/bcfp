@@ -12,14 +12,15 @@
 Example
 -------
 >>> from bcfp import BCFPEnhanced
->>> gen = BCFPEnhanced(fp_type='ecfp', radius=2, n_bits=2048, top_k=512, include_oov=True)
->>> X_train = gen.fit_transform(train_smiles)   # (n_train, 513)
+>>> gen = BCFPEnhanced(fp_type='ecfp', radius=2, n_bits=2048)   # default: Sort&Slice + OOV
+>>> X_train = gen.fit_transform(train_smiles)   # (n_train, <=2048): top-2047 keys + OOV
 >>> X_test  = gen.transform(test_smiles)        # uses the fitted vocabulary + OOV bucket
+>>> BCFPEnhanced(top_k=None, fold='remix').transform(smiles)   # stateless folding, no fit
 """
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence
+from typing import List, Sequence, Union
 
 import numpy as np
 from rdkit import Chem
@@ -39,15 +40,20 @@ class BCFPEnhanced:
     radius : int
         Morgan radius.
     n_bits : int
-        Folded width when ``top_k`` is None (baseline mode).
+        Output width: folded width when ``top_k`` is None, upper bound with ``top_k='auto'``.
     hash_func : {'rdkit_native', 'xxhash', 'blake3'}
         Hash backend (xxhash is header-only; blake3 is vendored — both built in).
-    top_k : int or None
-        If set, select the top-k most frequent training keys (Sort&Slice). If None, fold to
-        ``n_bits`` and do no vocabulary selection.
+    top_k : int, 'auto' or None
+        Number of most frequent training keys to keep (Sort&Slice). 'auto' (default) keeps
+        ``n_bits - 1`` with ``include_oov`` (``n_bits`` without), so the output is at most
+        ``n_bits`` wide. None folds to ``n_bits`` instead (no fit needed). On BBBP R=2
+        ECFP+BCFP, Sort&Slice + OOV beat every hash fold by +0.010 to +0.016 AUROC at equal width.
     include_oov : bool
-        If True (and ``top_k`` set), append one out-of-vocabulary bucket column that counts
-        test-time bits not in the fitted vocabulary.
+        If True (default, ``top_k`` set), append one out-of-vocabulary bucket column summing
+        all keys not in the fitted vocabulary.
+    fold, fold_salt : str, int
+        Folding used when ``top_k`` is None: 'modulo' (default) or 'remix'
+        (see :func:`bcfp.fingerprints.remix_key`).
     use_counts, use_chirality : bool
         Forwarded to the fingerprint generator.
     sort_by : {'df', 'tf'}
@@ -67,17 +73,24 @@ class BCFPEnhanced:
         radius: int = 2,
         n_bits: int = 2048,
         hash_func: str = "rdkit_native",
-        top_k: Optional[int] = None,
-        include_oov: bool = False,
+        top_k: Union[int, str, None] = "auto",
+        include_oov: bool = True,
         use_counts: bool = True,
         use_chirality: bool = True,
         sort_by: str = "df",
         min_df: int = 2,
+        fold: str = "modulo",
+        fold_salt: int = 0,
     ):
         self.gen = FingerprintGenerator(
             hash_func, fp_type, radius=radius,
             use_counts=use_counts, use_chirality=use_chirality, n_bits=n_bits,
+            fold=fold, fold_salt=fold_salt,
         )
+        if top_k == "auto":
+            top_k = n_bits - 1 if include_oov else n_bits
+        elif isinstance(top_k, str):
+            raise ValueError(f"top_k must be an int, 'auto' or None, got {top_k!r}")
         self.fp_type = fp_type
         self.radius = radius
         self.n_bits = n_bits

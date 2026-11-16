@@ -14,6 +14,8 @@ import pickle
 from typing import Dict, List, Tuple, Optional
 import numpy as np
 
+from . import __version__
+
 
 class FingerprintModel:
     """
@@ -278,7 +280,7 @@ class FingerprintModel:
             'n_features_with_oov': len(self.vocab_) + (1 if self.add_oov_bucket else 0),
             
             # Version control
-            'bcfp_version': '2.0.0',
+            'bcfp_version': __version__,
             'saved_timestamp': pickle.time.time() if hasattr(pickle, 'time') else None
         }
         
@@ -451,7 +453,7 @@ class FingerprintModel:
             'n_features_with_oov': len(self.vocab_) + (1 if self.add_oov_bucket else 0) if self.is_fitted_ else None,
             
             # Version
-            'bcfp_version': '2.0.0'
+            'bcfp_version': __version__
         }
     
     @staticmethod
