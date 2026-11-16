@@ -25,7 +25,7 @@ Example (low-level):
     >>> X = np.array([gen.fold_sparse_to_dense(s) for s in sparse])  # folded to n_bits
 """
 
-__version__ = '2.0.0'
+__version__ = '2.1.0'
 __author__ = 'Guillaume Godin'
 
 from .fingerprints import (

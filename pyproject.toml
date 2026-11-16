@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "bcfp"
-version = "2.0.0"
+version = "2.1.0"
 description = "High-performance molecular fingerprints (ECFP/BCFP) with 3 hash functions (RDKit-native, xxHash, BLAKE3)"
 readme = "README.md"
 requires-python = ">=3.11"

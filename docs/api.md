@@ -36,14 +36,21 @@ gen = BCFPEnhanced(fp_type='ecfp', radius=2, n_bits=2048, top_k=512, include_oov
 X_train = gen.fit_transform(train_smiles)   # (n_train, 513): 512 selected + 1 OOV
 X_test  = gen.transform(test_smiles)         # applies the fitted vocabulary + OOV bucket
 
+# Default (2.1.0+): Sort&Slice top-(n_bits-1) keys + 1 OOV bucket, output width <= n_bits
+gen = BCFPEnhanced(fp_type='ecfp', radius=2, n_bits=2048)
+X_train = gen.fit_transform(train_smiles)
+
 # Baseline (no selection): fold to n_bits, no fit required
-base = BCFPEnhanced(fp_type='ecfp', radius=2, n_bits=2048, top_k=None)
+base = BCFPEnhanced(fp_type='ecfp', radius=2, n_bits=2048, top_k=None, fold='remix')
 X = base.transform(smiles)                   # (n, 2048)
 ```
 
+- `top_k='auto'` (default) → Sort&Slice keeps `n_bits - 1` keys (+1 OOV) or `n_bits` without OOV.
 - `top_k=None` → plain folding to `n_bits` (no vocabulary; `transform` works without `fit`).
+  `fold='remix'` applies `splitmix64(key ^ fold_salt)` before `% n_bits`; `fold='modulo'` is plain `%`.
 - `top_k=K` → Sort&Slice selects the top-K most frequent training keys (`fit` required before
-  `transform`). `include_oov=True` appends one column counting test-time keys outside the vocabulary.
+  `transform`). `include_oov=True` appends one column summing the keys outside the vocabulary.
+- Why these defaults: [binning_benchmark.md](binning_benchmark.md).
 - Fitted state: `gen.vocab_`, `gen.key2col_`, `gen.selected_indices_`.
 
 ## `FingerprintGenerator` — low-level
@@ -109,10 +116,12 @@ functions. No SMILES serialization/reparse is involved.
 |---|---|---|
 | `fp_type` | `ecfp` | `ecfp` (atom-centered) or `bcfp` (bond-centered). |
 | `radius` | 2 | Morgan radius. |
-| `n_bits` | 2048 | Folded width in baseline mode (`top_k=None`). |
+| `n_bits` | 2048 | Output width: folded width (`top_k=None`) or vocabulary + OOV with `top_k='auto'`. |
 | `hash_func` | `rdkit_native` | `rdkit_native` / `xxhash` / `blake3`. |
-| `top_k` | None | Sort&Slice vocabulary size; None = plain folding. |
-| `include_oov` | False | Append an out-of-vocabulary bucket column (with `top_k`). |
+| `top_k` | `'auto'` | Sort&Slice vocabulary size; `'auto'` = `n_bits - 1` (with OOV); None = plain folding. |
+| `include_oov` | True | Append one out-of-vocabulary bucket column (with `top_k`). |
+| `fold` | `modulo` | Folding when `top_k=None`: `modulo` (`key % n_bits`) or `remix` (splitmix64 first). |
+| `fold_salt` | 0 | Salt for `fold='remix'`. |
 | `use_counts` | True | Count occurrences (else binary presence). |
 | `use_chirality` | True | Include chirality in the fingerprint. |
 | `sort_by` | `df` | Rank keys by document frequency (`df`) or total frequency (`tf`). |

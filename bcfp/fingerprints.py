@@ -12,6 +12,21 @@ except ImportError:
 from rdkit import Chem
 from rdkit.Chem import rdFingerprintGenerator
 
+_MASK64 = (1 << 64) - 1
+
+
+def remix_key(key: int, salt: int = 0) -> int:
+    """splitmix64(key ^ salt): spreads 32-bit fingerprint keys uniformly before ``% n_bits``.
+
+    RDKit-native ECFP/BCFP keys are less uniform in their low bits than an ideal hash, so plain
+    modulo folding collides more than chance (measured on BBBP R=2 ECFP+BCFP at 2048 bits:
+    below all 10 random salts, -0.003 AUROC).
+    """
+    x = ((key ^ salt) + 0x9E3779B97F4A7C15) & _MASK64
+    x = ((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9) & _MASK64
+    x = ((x ^ (x >> 27)) * 0x94D049BB133111EB) & _MASK64
+    return x ^ (x >> 31)
+
 
 class FingerprintGenerator:
     """
@@ -39,7 +54,8 @@ class FingerprintGenerator:
     
     Modes:
     ======
-    - 'basic': Fold sparse fingerprints to fixed size (2048 bits) using modulo
+    - 'basic': Fold sparse fingerprints to fixed size (2048 bits): ``key % n_bits``
+      (fold='modulo', default) or ``remix_key(key, fold_salt) % n_bits`` (fold='remix')
     - 'sortslice': Select top-K features from training set (document frequency)
     - 'sortslice_oov': Sort&Slice + Out-of-Vocabulary bucket for unseen features
     
@@ -56,7 +72,7 @@ class FingerprintGenerator:
     
     def __init__(self, hash_func: str, fp_type: str, radius: int = 2, 
                  use_counts: bool = True, use_chirality: bool = True,
-                 n_bits: int = 2048):
+                 n_bits: int = 2048, fold: str = "modulo", fold_salt: int = 0):
         """
         Args:
             hash_func: Hash function name
@@ -65,6 +81,9 @@ class FingerprintGenerator:
             use_counts: If True, count occurrences; if False, binary
             use_chirality: Include chirality information
             n_bits: Number of bits for folding (basic mode) or top-K (sortslice mode)
+            fold: 'modulo' (key % n_bits) or 'remix' (remix_key(key, fold_salt) % n_bits) for
+                fold_sparse_to_dense / generate_basic. The C++ byte/count outputs are unaffected.
+            fold_salt: Salt for fold='remix'
         """
         self.hash_func = hash_func
         self.fp_type = fp_type
@@ -72,7 +91,11 @@ class FingerprintGenerator:
         self.use_counts = use_counts
         self.use_chirality = use_chirality
         self.n_bits = n_bits
-        
+        if fold not in ("modulo", "remix"):
+            raise ValueError(f"fold must be 'modulo' or 'remix', got {fold}")
+        self.fold = fold
+        self.fold_salt = fold_salt
+
         # Validation
         valid_hashes = ['rdkit_native', 'xxhash', 'blake3']
         if hash_func not in valid_hashes:
@@ -199,10 +222,12 @@ class FingerprintGenerator:
             return self._generate_cpp(mol, "dict")
     
     def fold_sparse_to_dense(self, sparse_dict: Dict[int, int]) -> np.ndarray:
-        """Fold sparse fingerprint to fixed-size dense vector using modulo."""
+        """Fold sparse fingerprint to a fixed-size dense vector (see ``fold``)."""
         vec = np.zeros(self.n_bits, dtype=np.int32 if self.use_counts else np.int8)
+        remix = self.fold == "remix"
         for idx, count in sparse_dict.items():
-            vec[idx % self.n_bits] += count if self.use_counts else 1
+            col = (remix_key(idx, self.fold_salt) if remix else idx) % self.n_bits
+            vec[col] += count if self.use_counts else 1
         return vec
     
     def generate_basic(self, mol) -> np.ndarray:
@@ -294,7 +319,7 @@ class FingerprintGenerator:
     def __repr__(self) -> str:
         return (f"FingerprintGenerator(hash={self.hash_func}, type={self.fp_type}, "
                 f"radius={self.radius}, counts={self.use_counts}, "
-                f"chirality={self.use_chirality}, nbits={self.n_bits})")
+                f"chirality={self.use_chirality}, nbits={self.n_bits}, fold={self.fold})")
 
 
 def save_sortslice_vocab(vocab: List, key2col: Dict, filepath: str):
