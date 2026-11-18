@@ -329,6 +329,51 @@ The full tables (1024/4096 widths, signed hashing, hashed tails) and the method 
 `python benchmarks/binning_bbbp.py --data bbbp.csv` (add `--oov-sweep` for the OOV table).
 These numbers are from one dataset and one model.
 
+## Does BCFP earn its place?
+
+Adding BCFP doubles the key vocabulary, so it has to beat simply giving ECFP more columns. Two
+datasets, five arms, identical folds within each; everything binned with Sort&Slice + 1 OOV bucket,
+R=2 counts, vocabulary fitted on the training fold only. The `@4096` arms are the control: if the
+combined set only wins because it has more features to spread out, doubling ECFP's width should
+close the gap.
+
+**BBBP** (4089 molecules, binary, AUROC) and the **Biogen ADME** set (3521 molecules, four
+regression endpoints, Spearman ρ) — the second is the replication, on different data, a different
+task and a different metric. [The BCFP paper](https://arxiv.org/abs/2510.04837) established the
+combination on BBBP with a Random Forest; these runs re-measure it with XGBoost, add a
+column-budget control, and check that it holds on a second dataset.
+
+| comparison | BBBP, scaffold split | Biogen ADME, scaffold split (pooled over 4 endpoints) |
+|---|---|---|
+| **+BCFP on top of ECFP** | **+0.0054** [+0.0039, +0.0070] | **+0.0105** [+0.0057, +0.0153] — positive on **4/4** endpoints |
+| BCFP *instead of* ECFP | −0.0022 [−0.0053, +0.0008] | **−0.0159** [−0.0169, −0.0150] — negative on **4/4** endpoints |
+| ECFP alone, 4096 vs 2048 columns (width alone) | −0.0013 [−0.0028, +0.0001] | +0.0002 [−0.0014, +0.0018] |
+
+- **Add BCFP, never substitute it.** Bond-centred keys are a *worse* standalone description of a
+  molecule — on the ADME endpoints, measurably so on every one — and a genuinely complementary
+  addition to an atom-centred one. The two contribute symmetrically: removing either half of the
+  combined set costs about the same.
+- **The gain is information, not columns.** Widening ECFP on its own is worth nothing on either
+  dataset (−0.0013 / +0.0002). Extra width pays only when there is new chemistry to put in it.
+- **It is not uniform across endpoints.** On MDR1-MDCK efflux ratio, the most whole-molecule
+  physicochemical of the four, BCFP adds nothing measurable (+0.0037, CI spans zero). The metabolic
+  clearance and solubility endpoints gain +0.011 to +0.018. Test it on your endpoint.
+- **Use 2048 columns for the combined set** unless you have measured otherwise. BBBP prefers 4096,
+  Biogen does not (2048 matches or beats 4096 in 7 of 8 cells), so the wider array is a per-dataset
+  experiment rather than a default.
+
+```python
+import numpy as np
+ecfp = BCFPEnhanced(fp_type='ecfp', radius=2, n_bits=2048).fit_transform(train_smiles)
+bcfp = BCFPEnhanced(fp_type='bcfp', radius=2, n_bits=2048).fit_transform(train_smiles)
+X = np.hstack([ecfp, bcfp])
+```
+
+Full tables, per-endpoint numbers and the method are in
+[docs/bcfp_vs_ecfp.md](docs/bcfp_vs_ecfp.md). To reproduce:
+`python benchmarks/bcfp_vs_ecfp.py --data bbbp.csv --task classification --label p_np` or
+`python benchmarks/bcfp_vs_ecfp.py --data biogen.csv --task regression --smiles-col SMILES`.
+
 ## Hash Functions
 
 | Hash Function | Type | Speed | Use Case |
@@ -533,6 +578,8 @@ If you use BCFP in your research, please cite:
 ## Documentation
 
 ### Core Guides
+- **[Folding Benchmark](docs/binning_benchmark.md)** - Why Sort&Slice + OOV is the default, and how the folding schemes compare
+- **[BCFP vs ECFP](docs/bcfp_vs_ecfp.md)** - What the bond-centred half contributes, on BBBP and Biogen ADME
 - **[Model Persistence Guide](docs/MODEL_PERSISTENCE_GUIDE.md)** - Complete guide for save/load, training, and inference
 - **[Hash Function Compatibility](docs/HASH_FUNCTION_COMPATIBILITY.md)** - ⚠️ **CRITICAL** - Understanding hash functions and model compatibility
 - **Examples**: See `examples/` directory for complete workflows
